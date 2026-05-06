@@ -349,9 +349,9 @@ function SpendSenseApp() {
 
       <div
         id="ss-root"
-        className={`max-w-[430px] mx-auto font-sans selection:bg-indigo-100 ss-page-bg ${isDark ? 'bg-[#0D0D1A]' : 'bg-[#F8F9FF]'} shadow-2xl`}
+        className={`font-sans selection:bg-indigo-100 ss-page-bg ${isDark ? 'bg-[#0D0D1A]' : 'bg-[#F8F9FF]'} shadow-2xl`}
         data-theme={settings.theme}
-        style={{ height: '100dvh', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}
+        style={{ width: '100%', maxWidth: '430px', height: '100%', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}
       >
         <OfflineBanner/>
 
