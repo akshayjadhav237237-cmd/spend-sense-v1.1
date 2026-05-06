@@ -175,7 +175,7 @@ export default function ExpensesView({ settings, expenses, setExpenses, showToas
   },[swipedId]);
 
   return (
-    <div className="px-4 pt-4 pb-32 animate-fade-in">
+    <div className="px-4 pt-4 animate-fade-in">
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-lg font-bold text-gray-900 ss-text">Expenses</h2>
         <div className="flex gap-2">

@@ -270,27 +270,7 @@ function SpendSenseApp() {
 
   const isDark = settings.theme === 'dark';
 
-  const renderTab = () => {
-    const common = { settings, showToast };
-    switch(activeTab) {
-      case 'home':
-        return <HomeView {...common} expenses={expenses} lendings={lendings} setActiveTab={setActiveTab} setShowSettings={setShowSettings}/>;
-      case 'expenses':
-        return <ExpensesView {...common} expenses={expenses} setExpenses={setExpenses} openEditExpense={openEditExpense}/>;
-      case 'lend':
-        return <LendView {...common} lendings={lendings} setLendings={setLendings} openEditLend={openEditLend}
-          expandedPersons={expandedPersons} setExpandedPersons={setExpandedPersons}
-          animatingLendId={animatingLendId} setAnimatingLendId={setAnimatingLendId}
-          expandedPayments={expandedPayments} setExpandedPayments={setExpandedPayments}
-          lendingsLoading={lendingsLoading} updateLendingInDB={updateLendingInDB}/>;
-      case 'summary':
-        return <SummaryView {...common} expenses={expenses} lendings={lendings} savingsGoals={savingsGoals} setSavingsGoals={setSavingsGoals}/>;
-      case 'chat':
-        return <AiInsightsView {...common} expenses={expenses} lendings={lendings}/>;
-      default:
-        return null;
-    }
-  };
+  const common = { settings, showToast };
 
   return (
     <>
@@ -369,15 +349,32 @@ function SpendSenseApp() {
 
       <div
         id="ss-root"
-        className={`max-w-[430px] mx-auto min-h-screen relative overflow-hidden font-sans selection:bg-indigo-100 flex flex-col ss-page-bg ${isDark ? 'bg-[#0D0D1A]' : 'bg-[#F8F9FF]'} shadow-2xl`}
+        className={`max-w-[430px] mx-auto font-sans selection:bg-indigo-100 ss-page-bg ${isDark ? 'bg-[#0D0D1A]' : 'bg-[#F8F9FF]'} shadow-2xl`}
         data-theme={settings.theme}
+        style={{ height: '100dvh', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}
       >
         <OfflineBanner/>
 
-        {/* Main content area */}
-        <div className={activeTab === 'chat' ? 'flex flex-col flex-1 overflow-hidden pt-0' : 'flex-1 overflow-y-auto'}>
-          {renderTab()}
-        </div>
+        {/* Main scrollable content area — all tabs except chat */}
+        {activeTab !== 'chat' && (
+          <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ paddingBottom: '80px' }}>
+            {activeTab === 'home' && <HomeView {...common} expenses={expenses} lendings={lendings} setActiveTab={setActiveTab} setShowSettings={setShowSettings}/>}
+            {activeTab === 'expenses' && <ExpensesView {...common} expenses={expenses} setExpenses={setExpenses} openEditExpense={openEditExpense}/>}
+            {activeTab === 'lend' && <LendView {...common} lendings={lendings} setLendings={setLendings} openEditLend={openEditLend}
+              expandedPersons={expandedPersons} setExpandedPersons={setExpandedPersons}
+              animatingLendId={animatingLendId} setAnimatingLendId={setAnimatingLendId}
+              expandedPayments={expandedPayments} setExpandedPayments={setExpandedPayments}
+              lendingsLoading={lendingsLoading} updateLendingInDB={updateLendingInDB}/>}
+            {activeTab === 'summary' && <SummaryView {...common} expenses={expenses} lendings={lendings} savingsGoals={savingsGoals} setSavingsGoals={setSavingsGoals}/>}
+          </div>
+        )}
+
+        {/* AI Chat — manages its own scroll */}
+        {activeTab === 'chat' && (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <AiInsightsView {...common} expenses={expenses} lendings={lendings}/>
+          </div>
+        )}
 
         {/* Bottom Nav */}
         <BottomNav activeTab={activeTab} setActiveTab={setActiveTab}/>

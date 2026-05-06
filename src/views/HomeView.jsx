@@ -81,7 +81,7 @@ export default function HomeView({ settings, expenses, lendings, setActiveTab, s
   const yGridFractions = [0.25, 0.5, 0.75, 1.0];
 
   return (
-    <div className="px-4 pt-4 pb-32 animate-fade-in">
+    <div className="px-4 pt-4 animate-fade-in">
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div>
@@ -143,11 +143,12 @@ export default function HomeView({ settings, expenses, lendings, setActiveTab, s
           </div>
         ) : (
           <>
-            <div className="relative" style={{ touchAction: 'pan-y' }}>
+            <div className="relative" style={{ touchAction: 'pan-y', overflowX: 'hidden' }}>
               <svg
+                width="100%"
                 viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-                className="w-full"
-                style={{ overflow: 'visible' }}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ maxWidth: '100%', display: 'block', overflow: 'hidden' }}
                 onClick={e => e.stopPropagation()}
               >
                 {/* Y grid lines & labels */}
@@ -182,7 +183,7 @@ export default function HomeView({ settings, expenses, lendings, setActiveTab, s
                     <circle
                       key={`exp-${i}`}
                       cx={p.x} cy={p.y} r="5"
-                      fill={selectedGraphPoint?.index === i ? '#FF6B6B' : '#FF6B6B'}
+                      fill="#FF6B6B"
                       stroke="white" strokeWidth="2"
                       style={{ cursor: 'pointer', opacity: p.totalExp > 0 ? 1 : 0 }}
                       onClick={e => { e.stopPropagation(); setSelectedGraphPoint(selectedGraphPoint?.index === i ? null : { ...p, index: i }); }}
@@ -203,34 +204,40 @@ export default function HomeView({ settings, expenses, lendings, setActiveTab, s
                     />
                   )
                 ))}
-
-                {/* Popup on selected point */}
-                {selectedGraphPoint && (() => {
-                  const pt = selectedGraphPoint;
-                  const popupW = 140, popupH = 80;
-                  const px = Math.min(Math.max(pt.x - popupW / 2, PAD_L), SVG_W - popupW - 4);
-                  const py = Math.max(PAD_T - 4, pt.y - popupH - 10);
-                  const dayTxns = [
-                    ...pt.dayExpenses.map(e => ({ emoji: CATEGORIES.find(c => c.name === e.category)?.emoji || '💸', desc: e.desc || e.category, amount: e.amount, type: 'exp' })),
-                    ...pt.dayLendings.map(l => ({ emoji: '🤝', desc: l.name, amount: l.amountOriginal || parseFloat(l.amount) || 0, type: 'lend' })),
-                  ];
-                  const calcH = 36 + Math.min(dayTxns.length, 4) * 14 + 4;
-                  return (
-                    <g onClick={e => e.stopPropagation()}>
-                      <rect x={px} y={py} width={popupW} height={calcH} rx="8" fill="white" stroke="#E5E7EB" strokeWidth="1"
-                        style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.12))' }} />
-                      <text x={px + 8} y={py + 14} fontSize="8" fontWeight="600" fill="#374151">{formatDateShort(pt.iso)}</text>
-                      {pt.totalExp > 0 && <text x={px + 8} y={py + 24} fontSize="7" fill="#FF6B6B">Exp: {sym}{pt.totalExp.toFixed(0)}</text>}
-                      {pt.totalLend > 0 && <text x={px + 8} y={py + 24 + (pt.totalExp > 0 ? 10 : 0)} fontSize="7" fill="#4ECDC4">Lent: {sym}{pt.totalLend.toFixed(0)}</text>}
-                      {dayTxns.slice(0, 4).map((t, ti) => (
-                        <text key={ti} x={px + 8} y={py + 36 + ti * 13} fontSize="7" fill="#6B7280">
-                          {t.emoji} {t.desc.slice(0, 12)} — {sym}{t.amount.toFixed(0)}
-                        </text>
-                      ))}
-                    </g>
-                  );
-                })()}
               </svg>
+
+              {/* Fix 7 — HTML popup absolutely positioned over SVG container */}
+              {selectedGraphPoint && (() => {
+                const pt = selectedGraphPoint;
+                // Convert SVG coords to % for positioning over the responsive SVG
+                const pctX = pt.x / SVG_W;
+                const pctY = pt.y / SVG_H;
+                const dayTxns = [
+                  ...pt.dayExpenses.map(e => ({ emoji: CATEGORIES.find(c => c.name === e.category)?.emoji || '💸', desc: e.desc || e.category, amount: e.amount })),
+                  ...pt.dayLendings.map(l => ({ emoji: '🤝', desc: l.name, amount: l.amountOriginal || parseFloat(l.amount) || 0 })),
+                ];
+                return (
+                  <div
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      position: 'absolute',
+                      top: `calc(${pctY * 100}% - 90px)`,
+                      left: `clamp(8px, calc(${pctX * 100}% - 100px), calc(100% - 208px))`,
+                      zIndex: 20,
+                      width: '200px',
+                      maxWidth: '200px',
+                    }}
+                    className="bg-white ss-card rounded-xl p-3 shadow-lg border border-gray-100"
+                  >
+                    <p className="text-xs font-semibold text-gray-700 mb-1">{formatDateShort(pt.iso)}</p>
+                    {pt.totalExp > 0 && <p className="text-[11px]" style={{ color: '#FF6B6B' }}>Exp: {sym}{pt.totalExp.toFixed(0)}</p>}
+                    {pt.totalLend > 0 && <p className="text-[11px]" style={{ color: '#4ECDC4' }}>Lent: {sym}{pt.totalLend.toFixed(0)}</p>}
+                    {dayTxns.slice(0, 4).map((t, ti) => (
+                      <p key={ti} className="text-[10px] text-gray-500 truncate">{t.emoji} {t.desc.slice(0, 14)} — {sym}{t.amount.toFixed(0)}</p>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Legend */}

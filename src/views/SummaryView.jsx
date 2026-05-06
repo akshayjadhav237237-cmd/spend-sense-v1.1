@@ -104,7 +104,15 @@ function InteractiveSVGGraph({
         </div>
       ) : (
         <>
-          <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} onClick={e => e.stopPropagation()}>
+          {/* Fix 6 — wrap SVG in overflow:hidden container */}
+          <div style={{ width: '100%', overflowX: 'hidden', position: 'relative' }}>
+            <svg
+              width="100%"
+              viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+              preserveAspectRatio="xMidYMid meet"
+              style={{ maxWidth: '100%', display: 'block', overflow: 'hidden' }}
+              onClick={e => e.stopPropagation()}
+            >
             {/* Grid lines */}
             {[0.25, 0.5, 0.75, 1.0].map(f => {
               const y = PAD_T + PLOT_H - f * PLOT_H;
@@ -151,25 +159,34 @@ function InteractiveSVGGraph({
                 );
               })
             )}
+            </svg>
 
-            {/* Popup */}
+            {/* Fix 7 — popup as absolute HTML div (outside SVG) */}
             {selectedPoint && (() => {
               const { cx, cy, point, color, lineLabel } = selectedPoint;
-              const popupW = 130, popupH = 52;
-              const px = Math.min(Math.max(cx - popupW / 2, PAD_L), SVG_W - popupW - 4);
-              const py = Math.max(PAD_T - 2, cy - popupH - 10);
+              const pctX = cx / SVG_W;
+              const pctY = cy / SVG_H;
               return (
-                <g onClick={e => e.stopPropagation()}>
-                  <rect x={px} y={py} width={popupW} height={popupH} rx="8" fill="white" stroke="#E5E7EB" strokeWidth="1"
-                    style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.12))' }} />
-                  <text x={px + 8} y={py + 14} fontSize="8" fontWeight="600" fill="#374151">{formatDateShort(point.iso)}</text>
-                  <text x={px + 8} y={py + 26} fontSize="8" fill={color}>{lineLabel}</text>
-                  <text x={px + 8} y={py + 40} fontSize="9" fontWeight="700" fill="#111827">{sym}{point.value.toFixed(0)}</text>
-                  {point.meta && <text x={px + 8} y={py + 51} fontSize="7" fill="#9CA3AF">{point.meta}</text>}
-                </g>
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    top: `calc(${pctY * 100}% - 75px)`,
+                    left: `clamp(8px, calc(${pctX * 100}% - 100px), calc(100% - 208px))`,
+                    zIndex: 20,
+                    width: '200px',
+                    maxWidth: '200px',
+                  }}
+                  className="bg-white ss-card rounded-xl p-3 shadow-lg border border-gray-100"
+                >
+                  <p className="text-[10px] text-gray-400 mb-0.5">{formatDateShort(point.iso)}</p>
+                  <p className="text-xs font-medium mb-0.5" style={{ color }}>{lineLabel}</p>
+                  <p className="text-sm font-bold text-gray-800">{sym}{point.value.toFixed(0)}</p>
+                  {point.meta && <p className="text-[10px] text-gray-400 mt-0.5">{point.meta}</p>}
+                </div>
               );
             })()}
-          </svg>
+          </div>
 
           {/* Legend */}
           <div className="flex flex-wrap gap-3 mt-1">
@@ -263,7 +280,7 @@ export default function SummaryView({ settings, expenses, lendings, savingsGoals
   ];
 
   return(
-    <div className="px-4 pt-4 pb-32 animate-fade-in">
+    <div className="px-4 pt-4 animate-fade-in">
       <h2 className="text-lg font-bold text-gray-900 mb-4 ss-text">Summary</h2>
 
       {/* Stats Grid */}

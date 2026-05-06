@@ -295,7 +295,7 @@ export default function LendView({
   const FILTER_TABS=[{id:'pending',label:'Pending',count:pendingCount},{id:'returned',label:'Returned',count:returnedCount},{id:'all',label:'All'}];
 
   return (
-    <div className="px-4 pt-4 pb-32 animate-fade-in">
+    <div className="px-4 pt-4 animate-fade-in">
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-lg font-bold text-gray-900 ss-text">Lendings</h2>
         <div className="flex gap-2">
