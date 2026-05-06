@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.spendsense_akshay_jadhavs_projects_b3a18432.twa",
+      "sha256_cert_fingerprints": [
+        "0F:5A:C5:41:EE:88:0A:9A:8E:F4:D8:71:43:5C:0C:DC:06:E9:7B:8F:68:5F:5A:A6:1B:2A:41:C2:A0:58:82:AD"
+      ]
+    }
+  }
+]
