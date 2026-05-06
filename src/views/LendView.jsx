@@ -178,6 +178,11 @@ export default function LendView({
 
   const addLend = useCallback(async (l) => {
     try {
+      // Optimistic local update first (critical for standalone PWA/offline mode)
+      setLendings(p => [l, ...p]);
+      showToast('Lending added!', 'success');
+
+      // Attempt Supabase sync
       const dbRecord = {
         id: l.id,
         name: l.name,
@@ -192,23 +197,23 @@ export default function LendView({
       };
       const { error } = await supabase.from('lendings').insert([dbRecord]);
       if (error) throw error;
-      setLendings(p => [l, ...p]);
-      showToast('Lending added!', 'success');
     } catch (err) {
-      console.error('Add lending error:', err);
-      showToast('Failed to add lending', 'error');
+      console.error('Failed to sync new lending to DB:', err);
+      // Don't show error toast since it's saved locally
     }
   }, [setLendings, showToast]);
 
   const deleteLend = useCallback(async (id) => {
     try {
+      // Optimistic local update first
       setLendings(p => p.filter(l => l.id !== id));
+      showToast('Deleted', 'info');
+
+      // Attempt Supabase sync
       const { error } = await supabase.from('lendings').delete().eq('id', id);
       if (error) throw error;
-      showToast('Deleted', 'info');
     } catch (err) {
-      console.error('Delete lending error:', err);
-      showToast('Delete failed', 'error');
+      console.error('Failed to sync lending deletion to DB:', err);
     }
     setDeleteId(null);
   }, [setLendings, showToast]);
