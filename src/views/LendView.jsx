@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { ChevronDown, Trash2, Pencil } from 'lucide-react';
 import { formatCurr, getRelativeDateLabel, getTodayISO, parseAmount, generateId, avatarColor, getInitials } from '../utils.js';
 import { BottomSheet, ConfirmDialog, useContactPicker } from '../components/GlobalComponents.jsx';
-import { supabase } from '../supabaseClient.js';
 
 // Step 2 — Grouping utility
 const groupLendingsByPerson = (lendings) => {
@@ -177,44 +176,13 @@ export default function LendView({
   }, [filteredLendings]);
 
   const addLend = useCallback(async (l) => {
-    try {
-      // Optimistic local update first (critical for standalone PWA/offline mode)
-      setLendings(p => [l, ...p]);
-      showToast('Lending added!', 'success');
-
-      // Attempt Supabase sync
-      const dbRecord = {
-        id: l.id,
-        name: l.name,
-        phone: l.phone || '',
-        amount: l.amount,
-        amount_original: l.amountOriginal,
-        amount_paid: 0,
-        payments: [],
-        reason: l.reason,
-        date: l.date,
-        status: 'pending'
-      };
-      const { error } = await supabase.from('lendings').insert([dbRecord]);
-      if (error) throw error;
-    } catch (err) {
-      console.error('Failed to sync new lending to DB:', err);
-      // Don't show error toast since it's saved locally
-    }
+    setLendings(p => [l, ...p]);
+    showToast('Lending added!', 'success');
   }, [setLendings, showToast]);
 
-  const deleteLend = useCallback(async (id) => {
-    try {
-      // Optimistic local update first
-      setLendings(p => p.filter(l => l.id !== id));
-      showToast('Deleted', 'info');
-
-      // Attempt Supabase sync
-      const { error } = await supabase.from('lendings').delete().eq('id', id);
-      if (error) throw error;
-    } catch (err) {
-      console.error('Failed to sync lending deletion to DB:', err);
-    }
+  const deleteLend = useCallback((id) => {
+    setLendings(p => p.filter(l => l.id !== id));
+    showToast('Deleted', 'info');
     setDeleteId(null);
   }, [setLendings, showToast]);
 
@@ -252,29 +220,24 @@ export default function LendView({
 
   const remindLending = (lend) => {
     try {
-      const original = lend.amountOriginal || parseFloat(lend.amount) || 0;
       const paid = lend.amountPaid || 0;
+      const original = lend.amountOriginal || parseFloat(lend.amount) || 0;
       const remaining = original - paid;
-      const payments = lend.payments || [];
-
-      let paymentHistory = '';
-      if (payments.length > 0) {
-        paymentHistory = '\n\nPayment history:\n' + payments.map((p, i) =>
-          `${i + 1}. ${p.date} — ${sym}${parseFloat(p.amount).toFixed(2)}${p.note ? ` (${p.note})` : ''}`
-        ).join('\n');
-      }
-
-      const text = payments.length > 0
-        ? `Hey ${lend.name}! 👋 This is a friendly reminder about the money you borrowed from me.\n\nOriginal amount: ${sym}${original}\nFor: ${lend.reason}\nDate borrowed: ${lend.date}${paymentHistory}\n\nTotal returned so far: ${sym}${paid.toFixed(2)}\nStill pending: ${sym}${remaining.toFixed(2)}\n\nPlease return the remaining amount when you can! 😊`
-        : `Hey ${lend.name}! 👋 Friendly reminder — you borrowed ${sym}${original} from me on ${lend.date} for '${lend.reason}'. Please return it when you can! 😊`;
+      const text = paid > 0
+        ? `Hey ${lend.name}! You borrowed ${sym}${original} from me on ${lend.date} for '${lend.reason}'. You've returned ${sym}${paid.toFixed(2)} so far — ${sym}${remaining.toFixed(2)} is still pending. Please return it when you can!`
+        : `Hey ${lend.name}! Friendly reminder — you borrowed ${sym}${original} from me on ${lend.date} for '${lend.reason}'. Please return it when you can!`;
 
       if (lend.phone) {
         const phone = lend.phone.replace(/[^\d]/g, '').slice(-10);
         window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(text)}`, '_blank');
       } else {
-        navigator.clipboard.writeText(text)
-          .then(() => showToast('Message copied!', 'success'))
-          .catch(() => showToast('No phone number saved', 'info'));
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text)
+            .then(() => showToast('Message copied to clipboard!', 'success'))
+            .catch(() => showToast('Could not copy message', 'error'));
+        } else {
+          showToast('No phone number saved for this contact', 'info');
+        }
       }
     } catch (err) {
       console.error('remindLending error:', err);
@@ -300,7 +263,7 @@ export default function LendView({
   const FILTER_TABS=[{id:'pending',label:'Pending',count:pendingCount},{id:'returned',label:'Returned',count:returnedCount},{id:'all',label:'All'}];
 
   return (
-    <div className="px-4 pt-4 animate-fade-in">
+    <div className="px-4 pt-4 pb-32 animate-fade-in">
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-lg font-bold text-gray-900 ss-text">Lendings</h2>
         <div className="flex gap-2">

@@ -60,149 +60,6 @@ function AddGoalModal({ isOpen, onClose, onAdd, sym }) {
   );
 }
 
-// ── Shared SVG Line Graph component ──
-function InteractiveSVGGraph({
-  lines, // [{ key, color, points: [{iso, value, meta}] }]
-  title,
-  sym,
-  xLabelCount = 5,
-  emptyMsg = 'No data yet',
-}) {
-  const [selectedPoint, setSelectedPoint] = useState(null);
-  const SVG_W = 340, SVG_H = 130, PAD_L = 38, PAD_R = 8, PAD_T = 14, PAD_B = 22;
-  const PLOT_W = SVG_W - PAD_L - PAD_R;
-  const PLOT_H = SVG_H - PAD_T - PAD_B;
-
-  const allValues = lines.flatMap(l => l.points.map(p => p.value));
-  const maxVal = Math.max(...allValues, 1);
-  const n = lines[0]?.points.length || 1;
-
-  const getX = (i) => PAD_L + (n <= 1 ? 0.5 : i / (n - 1)) * PLOT_W;
-  const getY = (val) => PAD_T + PLOT_H - (val / maxVal) * PLOT_H;
-
-  const hasData = allValues.some(v => v > 0);
-
-  const xIndices = useMemo(() => {
-    if (n <= 1) return [0];
-    const step = Math.floor((n - 1) / (xLabelCount - 1));
-    return Array.from({ length: xLabelCount }, (_, i) => Math.min(i * step, n - 1));
-  }, [n, xLabelCount]);
-
-  const formatDateShort = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso + 'T00:00:00');
-    return `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })}`;
-  };
-
-  return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 mb-4 ss-card" onClick={() => setSelectedPoint(null)}>
-      <p className="text-sm font-semibold text-gray-700 mb-3 ss-text">{title}</p>
-      {!hasData ? (
-        <div className="flex flex-col items-center justify-center h-24 text-gray-300 ss-text-muted">
-          <span className="text-2xl mb-1">📊</span>
-          <p className="text-xs">{emptyMsg}</p>
-        </div>
-      ) : (
-        <>
-          {/* Fix 6 — wrap SVG in overflow:hidden container */}
-          <div style={{ width: '100%', overflowX: 'hidden', position: 'relative' }}>
-            <svg
-              width="100%"
-              viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-              preserveAspectRatio="xMidYMid meet"
-              style={{ maxWidth: '100%', display: 'block', overflow: 'hidden' }}
-              onClick={e => e.stopPropagation()}
-            >
-            {/* Grid lines */}
-            {[0.25, 0.5, 0.75, 1.0].map(f => {
-              const y = PAD_T + PLOT_H - f * PLOT_H;
-              const val = f * maxVal;
-              return (
-                <g key={f}>
-                  <line x1={PAD_L} x2={SVG_W - PAD_R} y1={y} y2={y} stroke="#F3F4F6" strokeWidth="1" />
-                  <text x={PAD_L - 4} y={y + 3.5} textAnchor="end" fontSize="7" fill="#9CA3AF">
-                    {val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val.toFixed(0)}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Lines */}
-            {lines.map(line => {
-              const pathD = line.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i).toFixed(1)} ${getY(p.value).toFixed(1)}`).join(' ');
-              return <path key={line.key} d={pathD} fill="none" stroke={line.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />;
-            })}
-
-            {/* X axis labels */}
-            {xIndices.map(i => (
-              <text key={i} x={getX(i)} y={SVG_H - 5} textAnchor="middle" fontSize="7" fill="#9CA3AF">
-                {formatDateShort(lines[0]?.points[i]?.iso || '')}
-              </text>
-            ))}
-
-            {/* Data point circles */}
-            {lines.map(line =>
-              line.points.map((p, i) => {
-                if (p.value <= 0) return null;
-                const cx = getX(i), cy = getY(p.value);
-                const isSelected = selectedPoint?.lineKey === line.key && selectedPoint?.index === i;
-                return (
-                  <circle key={`${line.key}-${i}`} cx={cx} cy={cy} r={isSelected ? 6 : 5}
-                    fill={line.color} stroke="white" strokeWidth="2"
-                    style={{ cursor: 'pointer' }}
-                    onClick={e => {
-                      e.stopPropagation();
-                      if (isSelected) { setSelectedPoint(null); return; }
-                      setSelectedPoint({ lineKey: line.key, index: i, cx, cy, point: p, color: line.color, lineLabel: line.label });
-                    }}
-                  />
-                );
-              })
-            )}
-            </svg>
-
-            {/* Fix 7 — popup as absolute HTML div (outside SVG) */}
-            {selectedPoint && (() => {
-              const { cx, cy, point, color, lineLabel } = selectedPoint;
-              const pctX = cx / SVG_W;
-              const pctY = cy / SVG_H;
-              return (
-                <div
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    position: 'absolute',
-                    top: `calc(${pctY * 100}% - 75px)`,
-                    left: `clamp(8px, calc(${pctX * 100}% - 100px), calc(100% - 208px))`,
-                    zIndex: 20,
-                    width: '200px',
-                    maxWidth: '200px',
-                  }}
-                  className="bg-white ss-card rounded-xl p-3 shadow-lg border border-gray-100"
-                >
-                  <p className="text-[10px] text-gray-400 mb-0.5">{formatDateShort(point.iso)}</p>
-                  <p className="text-xs font-medium mb-0.5" style={{ color }}>{lineLabel}</p>
-                  <p className="text-sm font-bold text-gray-800">{sym}{point.value.toFixed(0)}</p>
-                  {point.meta && <p className="text-[10px] text-gray-400 mt-0.5">{point.meta}</p>}
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-3 mt-1">
-            {lines.map(line => (
-              <span key={line.key} className="flex items-center gap-1.5 text-xs text-gray-500 ss-text-muted">
-                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: line.color }} />
-                {line.label}
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 export default function SummaryView({ settings, expenses, lendings, savingsGoals, setSavingsGoals, showToast }) {
   const sym = settings.currency;
   const mk = getCurrentMonthKey();
@@ -216,57 +73,47 @@ export default function SummaryView({ settings, expenses, lendings, savingsGoals
   const recovered = useMemo(()=>lendings.filter(l=>l.status==='returned').reduce((s,l)=>s+(l.amountOriginal||parseFloat(l.amount)||0),0),[lendings]);
   const stillOwed = useMemo(()=>lendings.filter(l=>l.status==='pending'||l.status==='partial').reduce((s,l)=>s+(parseFloat(l.amount)||0),0),[lendings]);
 
-  const topCat = useMemo(()=>{
+  const catTotals = useMemo(()=>{
     const m={};
     monthExp.forEach(e=>{ m[e.category]=(m[e.category]||0)+e.amount; });
-    const cats = CATEGORIES.map(c=>({...c,total:m[c.name]||0})).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
-    return cats[0];
+    return CATEGORIES.map(c=>({...c,total:m[c.name]||0})).filter(c=>c.total>0);
   },[monthExp]);
+  const maxCat = useMemo(()=>Math.max(...catTotals.map(c=>c.total),1),[catTotals]);
 
+  const last6Months = useMemo(()=>{
+    const res=[];
+    for(let i=5;i>=0;i--){
+      const d=new Date(mk+'-01'); d.setMonth(d.getMonth()-i);
+      const key=d.toISOString().slice(0,7);
+      const label=new Intl.DateTimeFormat('en-IN',{month:'short'}).format(d);
+      const total=expenses.filter(e=>getMonthKey(e.date)===key).reduce((s,e)=>s+e.amount,0);
+      res.push({key,label,total});
+    }
+    return res;
+  },[expenses,mk]);
+
+  const maxMonthly = useMemo(()=>Math.max(...last6Months.map(m=>m.total),1),[last6Months]);
+  const SVG_W=300, SVG_H=80;
+  const points = last6Months.map((m,i)=>{
+    const xFraction = last6Months.length > 1 ? i/(last6Months.length-1) : 0.5;
+    return {
+      x: xFraction*(SVG_W-20)+10,
+      y: SVG_H-10-((m.total/maxMonthly)*(SVG_H-20)),
+      total:m.total, label:m.label
+    };
+  });
+  const polyline = points.map(p=>`${p.x},${p.y}`).join(' ');
+
+  const topCat = catTotals.sort((a,b)=>b.total-a.total)[0];
   const pctChange = prevTotal>0?Math.round(((monthTotal-prevTotal)/prevTotal)*100):null;
   const pendingCount = lendings.filter(l=>l.status==='pending'||l.status==='partial').length;
-
-  // ── Category line graph — current month, per day per category ──
-  const categoryGraphLines = useMemo(() => {
-    // Get days of current month
-    const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const days = Array.from({ length: daysInMonth }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth(), i + 1);
-      return d.toISOString().slice(0, 10);
-    });
-    const catMap = {};
-    monthExp.forEach(e => {
-      if (!catMap[e.category]) catMap[e.category] = {};
-      catMap[e.category][e.date] = (catMap[e.category][e.date] || 0) + e.amount;
-    });
-    const activeCats = CATEGORIES.filter(c => catMap[c.name]);
-    return activeCats.slice(0, 5).map(cat => ({
-      key: cat.name,
-      label: `${cat.emoji} ${cat.name}`,
-      color: cat.color,
-      points: days.map(iso => ({ iso, value: catMap[cat.name]?.[iso] || 0 })),
-    }));
-  }, [monthExp]);
-
-  // ── 90-day daily spend graph ──
-  const ninetyDayLines = useMemo(() => {
-    const days = [];
-    for (let i = 89; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
-      const total = expenses.filter(e => e.date === iso).reduce((s, e) => s + e.amount, 0);
-      days.push({ iso, value: total });
-    }
-    return [{ key: 'spend', label: 'Daily Spend', color: '#6C63FF', points: days }];
-  }, [expenses]);
 
   const [showGoalModal,setShowGoalModal]=useState(false);
   const [addFundsGoal,setAddFundsGoal]=useState(null);
   const [addFundsAmt,setAddFundsAmt]=useState('');
 
   const TrendIcon=({cur,prev})=>{
-    if(prev===0) return <span className="flex items-center gap-0.5 text-gray-400 text-xs"><Minus size={12}/>New</span>;
+    if(prev===0) return <span className="flex items-center gap-0.5 text-gray-400 text-xs"><Minus size={12}/> New</span>;
     const p=Math.round(((cur-prev)/prev)*100);
     if(cur>prev) return <span className="flex items-center gap-0.5 text-red-400 text-xs"><TrendingUp size={12}/>+{p}%</span>;
     return <span className="flex items-center gap-0.5 text-green-500 text-xs"><TrendingDown size={12}/>{p}%</span>;
@@ -280,7 +127,7 @@ export default function SummaryView({ settings, expenses, lendings, savingsGoals
   ];
 
   return(
-    <div className="px-4 pt-4 animate-fade-in">
+    <div className="px-4 pt-4 pb-32 animate-fade-in">
       <h2 className="text-lg font-bold text-gray-900 mb-4 ss-text">Summary</h2>
 
       {/* Stats Grid */}
@@ -294,23 +141,50 @@ export default function SummaryView({ settings, expenses, lendings, savingsGoals
         ))}
       </div>
 
-      {/* UPDATE 2 — Category interactive SVG line graph */}
-      <InteractiveSVGGraph
-        lines={categoryGraphLines}
-        title="Spending by Category"
-        sym={sym}
-        xLabelCount={5}
-        emptyMsg="No spending data this month"
-      />
+      {/* Category Bar Chart */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 mb-4 ss-card">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-sm font-semibold text-gray-700 ss-text">Spending by Category</span>
+          <span className="text-xs text-gray-400 ss-text-muted">{new Intl.DateTimeFormat('en-IN',{month:'short',year:'numeric'}).format(new Date(mk+'-01'))}</span>
+        </div>
+        {catTotals.length===0?(
+          <div className="flex flex-col items-center py-8"><span className="text-3xl mb-2">📊</span><p className="text-sm text-gray-400">No spending data</p></div>
+        ):(
+          <>
+            <div className="flex items-end gap-1 h-32 px-1">
+              {catTotals.map(c=>(
+                <div key={c.name} className="flex-1 flex flex-col items-center gap-0.5 group">
+                  <div title={`${c.name}: ${formatCurr(c.total,sym)}`} className="w-full rounded-t-md transition-all duration-700 cursor-pointer"
+                    style={{height:`${(c.total/maxCat)*100}%`,minHeight:'4px',background:c.color}}/>
+                  <span className="text-[10px]">{c.emoji}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-gray-100 mt-2"/>
+          </>
+        )}
+      </div>
 
-      {/* UPDATE 2 — 90-day interactive SVG line graph */}
-      <InteractiveSVGGraph
-        lines={ninetyDayLines}
-        title="Last 90 Days"
-        sym={sym}
-        xLabelCount={6}
-        emptyMsg="No activity in last 90 days"
-      />
+      {/* 6-Month Line Chart */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 mb-4 ss-card">
+        <p className="text-sm font-semibold text-gray-700 mb-3 ss-text">6-Month Trend</p>
+        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" role="img" aria-label="6 month spending trend">
+          {[0.25,0.5,0.75,1].map(f=>(
+            <line key={f} x1="10" x2={SVG_W-10} y1={SVG_H-10-f*(SVG_H-20)} y2={SVG_H-10-f*(SVG_H-20)} stroke="#F3F4F6" strokeWidth="1"/>
+          ))}
+          <polyline points={polyline} fill="none" stroke="#6C63FF" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+          {points.map((p,i)=>(
+            <circle key={i} cx={p.x} cy={p.y} r="4" fill="#6C63FF" stroke="white" strokeWidth="2">
+              <title>{p.label}: {formatCurr(p.total,sym)}</title>
+            </circle>
+          ))}
+        </svg>
+        <div className="flex gap-0.5 mt-1">
+          {last6Months.map(m=>(
+            <div key={m.key} className="flex-1 text-center text-[10px] text-gray-400">{m.label}</div>
+          ))}
+        </div>
+      </div>
 
       {/* Insights */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 mb-4 ss-card">

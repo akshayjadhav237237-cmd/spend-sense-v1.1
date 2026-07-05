@@ -152,8 +152,8 @@ vercel.json                  # SPA routing rules for Vercel deployment
 ### Run Locally
 
 ```bash
-git clone https://github.com/akshayjadhav237237-cmd/spend-sense-v1.1.git
-cd spend-sense-v1.1
+git clone https://github.com/akshayjadhav237237-cmd/Spend-Sense.git
+cd Spend-Sense
 npm install
 npm run dev
 ```

@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from './supabaseClient.js';
-import AuthPage from './components/AuthPage.jsx';
+import React, { useState, useEffect, useCallback } from 'react';
 import { OfflineBanner, Toast, BottomNav, BottomSheet } from './components/GlobalComponents.jsx';
 import HomeView from './views/HomeView.jsx';
 import ExpensesView from './views/ExpensesView.jsx';
@@ -39,29 +37,10 @@ function SpendSenseApp() {
     return Array.isArray(loaded) ? loaded.filter(e => e?.id && e?.amount && e?.date) : [];
   });
   const [lendings, setLendings] = useState(() => {
-    try {
-      const stored = localStorage.getItem('ss_lendings');
-      if (!stored) return [];
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map(l => ({
-        ...l,
-        amountOriginal: l.amountOriginal ?? l.amount_original ?? parseFloat(l.amount) ?? 0,
-        amountPaid: l.amountPaid ?? l.amount_paid ?? 0,
-        payments: Array.isArray(l.payments) ? l.payments.map(p => ({
-          id: p.id || generateId(),
-          amount: parseFloat(p.amount) || 0,
-          date: p.date || getTodayISO(),
-          note: p.note || ''
-        })) : [],
-        status: l.status ?? 'pending'
-      }));
-    } catch (err) {
-      console.warn('Failed to load lendings:', err);
-      return [];
-    }
+    const loaded = safeLoad('ss_lendings', []);
+    return Array.isArray(loaded) ? loaded : [];
   });
-  const [lendingsLoading, setLendingsLoading] = useState(false);
+  const [lendingsLoading] = useState(false);
   const [recurringExpenses, setRecurringExpenses] = useState(() => safeLoad('ss_recurring', []));
   const [savingsGoals, setSavingsGoals] = useState(() => safeLoad('ss_goals', []));
   const [chatHistory, setChatHistory] = useState(() => safeLoad('ss_chat', []));
@@ -88,97 +67,17 @@ function SpendSenseApp() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // localStorage sync
+  // localStorage sync (all data stored locally)
   useEffect(() => { safeSave('ss_settings', settings, showToast); }, [settings]);
   useEffect(() => { safeSave('ss_expenses', expenses, showToast); }, [expenses]);
+  useEffect(() => { safeSave('ss_lendings', lendings, showToast); }, [lendings]);
   useEffect(() => { safeSave('ss_recurring', recurringExpenses, showToast); }, [recurringExpenses]);
   useEffect(() => { safeSave('ss_goals', savingsGoals, showToast); }, [savingsGoals]);
   useEffect(() => { safeSave('ss_chat', chatHistory, showToast); }, [chatHistory]);
-
-  // UPDATE 6 — Persist lendings (with payments) to localStorage
-  useEffect(() => {
-    if (lendings.length === 0 && lendingsLoading) return;
-    try {
-      const toSave = lendings.map(l => ({
-        ...l,
-        payments: Array.isArray(l.payments) ? l.payments : [],
-        amountPaid: l.amountPaid || 0,
-        amountOriginal: l.amountOriginal || parseFloat(l.amount) || 0,
-        status: l.status || 'pending'
-      }));
-      localStorage.setItem('ss_lendings', JSON.stringify(toSave));
-    } catch (err) {
-      console.warn('Failed to save lendings:', err);
-    }
-  }, [lendings]);
-
-  // Load lendings from Supabase (merges with localStorage fallback)
-  useEffect(() => {
-    const loadLendings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('lendings')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        const mapped = (data || []).map(l => ({
-          id: l.id,
-          name: l.name,
-          phone: l.phone || '',
-          amount: l.amount,
-          amountOriginal: l.amount_original || l.amount,
-          amountPaid: l.amount_paid || 0,
-          payments: Array.isArray(l.payments) ? l.payments.map(p => ({
-            id: p.id || generateId(),
-            amount: parseFloat(p.amount) || 0,
-            date: p.date || getTodayISO(),
-            note: p.note || ''
-          })) : [],
-          reason: l.reason,
-          date: l.date,
-          status: l.status || 'pending'
-        }));
-        if (mapped.length > 0) setLendings(mapped);
-      } catch (err) {
-        console.error('Failed to load lendings from Supabase:', err);
-        // localStorage fallback already loaded in useState init
-      }
-    };
-    loadLendings();
-  }, []);
-
-  // UPDATE 5 — Theme on ss-root
+  // Theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', settings.theme || 'light');
-    const root = document.getElementById('ss-root');
-    if (root) root.setAttribute('data-theme', settings.theme === 'dark' ? 'dark' : 'light');
   }, [settings.theme]);
-
-  // UPDATE 4 — Auto backup on every app open
-  useEffect(() => {
-    const createAutoBackup = () => {
-      try {
-        const backup = {
-          version: '1.1',
-          backupDate: new Date().toISOString(),
-          settings,
-          expenses,
-          lendings,
-          savingsGoals,
-          recurringExpenses
-        };
-        const existing = JSON.parse(localStorage.getItem('ss_backups') || '[]');
-        const updated = [backup, ...existing].slice(0, 5);
-        localStorage.setItem('ss_backups', JSON.stringify(updated));
-        localStorage.setItem('ss_last_backup', new Date().toISOString());
-        console.log('Auto backup created:', backup.backupDate);
-      } catch (err) {
-        console.warn('Auto backup failed:', err);
-      }
-    };
-    const timer = setTimeout(createAutoBackup, 2000);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Recurring expense auto-add on mount
   useEffect(() => {
@@ -219,27 +118,10 @@ function SpendSenseApp() {
     setShowEditExpenseModal(true);
   };
 
-  const updateLendingInDB = async (id, updates) => {
-    try {
-      const dbUpdates = {};
-      if (updates.status !== undefined) dbUpdates.status = updates.status;
-      if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
-      if (updates.amountPaid !== undefined) dbUpdates.amount_paid = updates.amountPaid;
-      if (updates.amountOriginal !== undefined) dbUpdates.amount_original = updates.amountOriginal;
-      if (updates.payments !== undefined) dbUpdates.payments = updates.payments;
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
-      if (updates.reason !== undefined) dbUpdates.reason = updates.reason;
-      if (updates.date !== undefined) dbUpdates.date = updates.date;
-      const { error } = await supabase.from('lendings').update(dbUpdates).eq('id', id);
-      if (error) throw error;
-    } catch (err) {
-      console.error('Failed to update lending in DB:', err);
-      showToast('Sync error — changes saved locally', 'info');
-    }
-  };
+  // No-op: lendings are now fully local, saved via useEffect above
+  const updateLendingInDB = () => {};
 
-  const handleEditLend = async () => {
+  const handleEditLend = () => {
     try {
       const amt = parseFloat(editLendForm.amount);
       if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return; }
@@ -249,14 +131,6 @@ function SpendSenseApp() {
         amountOriginal: amt, amount: amt - (l.amountPaid || 0),
         reason: editLendForm.reason.trim(), date: editLendForm.date
       } : l));
-      await updateLendingInDB(editingLend.id, {
-        name: editLendForm.name.trim(),
-        phone: editLendForm.phone.trim(),
-        amountOriginal: amt,
-        amount: amt - (editingLend.amountPaid || 0),
-        reason: editLendForm.reason.trim(),
-        date: editLendForm.date
-      });
       setShowEditLendModal(false); setEditingLend(null);
       showToast('Lending updated!', 'success');
     } catch (err) { showToast('Something went wrong', 'error'); }
@@ -270,7 +144,27 @@ function SpendSenseApp() {
 
   const isDark = settings.theme === 'dark';
 
-  const common = { settings, showToast };
+  const renderTab = () => {
+    const common = { settings, showToast };
+    switch(activeTab) {
+      case 'home':
+        return <HomeView {...common} expenses={expenses} lendings={lendings} setActiveTab={setActiveTab} setShowSettings={setShowSettings}/>;
+      case 'expenses':
+        return <ExpensesView {...common} expenses={expenses} setExpenses={setExpenses} openEditExpense={openEditExpense}/>;
+      case 'lend':
+        return <LendView {...common} lendings={lendings} setLendings={setLendings} openEditLend={openEditLend}
+          expandedPersons={expandedPersons} setExpandedPersons={setExpandedPersons}
+          animatingLendId={animatingLendId} setAnimatingLendId={setAnimatingLendId}
+          expandedPayments={expandedPayments} setExpandedPayments={setExpandedPayments}
+          lendingsLoading={lendingsLoading} updateLendingInDB={updateLendingInDB}/>;
+      case 'summary':
+        return <SummaryView {...common} expenses={expenses} lendings={lendings} savingsGoals={savingsGoals} setSavingsGoals={setSavingsGoals}/>;
+      case 'chat':
+        return <AiInsightsView {...common} expenses={expenses} lendings={lendings}/>;
+      default:
+        return null;
+    }
+  };
 
   return (
     <>
@@ -304,77 +198,38 @@ function SpendSenseApp() {
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation: none !important; transition: none !important; }
         }
-        /* UPDATE 5 — Exhaustive dark mode */
-        [data-theme="dark"] { color-scheme: dark; }
-        [data-theme="dark"] .ss-page-bg { background-color: #0D0D1A !important; }
-        [data-theme="dark"] .ss-card { background-color: #1A1A2E !important; border-color: rgba(255,255,255,0.06) !important; box-shadow: none !important; }
-        [data-theme="dark"] .ss-text { color: #E8E8F4 !important; }
-        [data-theme="dark"] .ss-text-muted { color: #8888AA !important; }
-        [data-theme="dark"] .ss-input { background-color: #252540 !important; color: #E8E8F4 !important; border-color: rgba(255,255,255,0.1) !important; }
-        [data-theme="dark"] .ss-bottom-nav { background-color: #1A1A2E !important; border-color: rgba(255,255,255,0.06) !important; }
+        [data-theme="dark"] {
+          --ss-bg: #0F0F1A;
+          --ss-surface: #1A1A2E;
+          --ss-surface2: #252540;
+          --ss-text: #E8E8F4;
+          --ss-text-muted: #9090B0;
+          --ss-border: rgba(255,255,255,0.08);
+        }
+        [data-theme="dark"] .ss-page-bg   { background-color: #0F0F1A !important; }
+        [data-theme="dark"] .ss-card      { background-color: #1A1A2E !important; border-color: rgba(255,255,255,0.07) !important; }
+        [data-theme="dark"] .ss-text      { color: #E8E8F4 !important; }
+        [data-theme="dark"] .ss-text-muted{ color: #9090B0 !important; }
+        [data-theme="dark"] .ss-input     { background-color: #252540 !important; color: #E8E8F4 !important; border-color: rgba(255,255,255,0.12) !important; }
+        [data-theme="dark"] .ss-bottom-nav{ background-color: #1A1A2E !important; border-color: rgba(255,255,255,0.07) !important; }
         [data-theme="dark"] .ss-bottom-sheet { background-color: #1A1A2E !important; }
-        [data-theme="dark"] .ss-chip-inactive { background-color: #252540 !important; color: #C0C0E0 !important; border-color: rgba(255,255,255,0.08) !important; }
-        [data-theme="dark"] .ss-section-header { color: #8888AA !important; background-color: #0D0D1A !important; }
+        [data-theme="dark"] .ss-chip-inactive { background-color: #252540 !important; color: #C0C0E0 !important; border-color: rgba(255,255,255,0.1) !important; }
+        [data-theme="dark"] .ss-section-header { color: #9090B0 !important; background-color: #0F0F1A !important; }
         [data-theme="dark"] .ss-drag-handle { background-color: #3A3A5C !important; }
-        [data-theme="dark"] .ss-divider { border-color: rgba(255,255,255,0.06) !important; }
-        [data-theme="dark"] .ss-avatar-bg { background-color: #2D2D50 !important; color: #A0A0D0 !important; }
-        [data-theme="dark"] input { background-color: #252540 !important; color: #E8E8F4 !important; }
-        [data-theme="dark"] input::placeholder { color: #6666AA !important; }
-        [data-theme="dark"] select { background-color: #252540 !important; color: #E8E8F4 !important; }
-        [data-theme="dark"] textarea { background-color: #252540 !important; color: #E8E8F4 !important; }
-        [data-theme="dark"] .bg-white { background-color: #1A1A2E !important; }
-        [data-theme="dark"] .bg-gray-50 { background-color: #252540 !important; }
-        [data-theme="dark"] .bg-gray-100 { background-color: #2A2A45 !important; }
-        [data-theme="dark"] .text-gray-800 { color: #E8E8F4 !important; }
-        [data-theme="dark"] .text-gray-700 { color: #D0D0E8 !important; }
-        [data-theme="dark"] .text-gray-600 { color: #B0B0CC !important; }
-        [data-theme="dark"] .text-gray-500 { color: #9090B0 !important; }
-        [data-theme="dark"] .text-gray-400 { color: #7070A0 !important; }
-        [data-theme="dark"] .border-gray-100 { border-color: rgba(255,255,255,0.06) !important; }
-        [data-theme="dark"] .border-gray-50 { border-color: rgba(255,255,255,0.04) !important; }
-        [data-theme="dark"] .bg-indigo-50 { background-color: #1E1E40 !important; }
-        [data-theme="dark"] .bg-indigo-100 { background-color: #25254A !important; }
-        [data-theme="dark"] .bg-green-50 { background-color: #0F2A1A !important; }
-        [data-theme="dark"] .bg-red-50 { background-color: #2A0F0F !important; }
-        [data-theme="dark"] .bg-yellow-50 { background-color: #2A2010 !important; }
-        [data-theme="dark"] .bg-blue-50 { background-color: #0F1A2A !important; }
-        [data-theme="dark"] .bg-teal-50 { background-color: #0F2525 !important; }
-        [data-theme="dark"] .bg-orange-50 { background-color: #2A1A0F !important; }
-        [data-theme="dark"] .sticky { background-color: #0D0D1A !important; }
-        [data-theme="dark"] .shadow-sm { box-shadow: none !important; }
-        [data-theme="dark"] .shadow-md { box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important; }
-        [data-theme="dark"] .shadow-lg { box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; }
-        [data-theme="dark"] .shadow-2xl { box-shadow: 0 0 60px rgba(0,0,0,0.6) !important; }
+        [data-theme="dark"] .ss-divider   { border-color: rgba(255,255,255,0.07) !important; }
+        [data-theme="dark"] .ss-avatar-bg { background-color: #2D2D50 !important; }
       `}</style>
 
       <div
-        id="ss-root"
-        className={`font-sans selection:bg-indigo-100 ss-page-bg ${isDark ? 'bg-[#0D0D1A]' : 'bg-[#F8F9FF]'} shadow-2xl`}
+        className={`w-full min-h-screen relative overflow-hidden font-sans selection:bg-indigo-100 flex flex-col ss-root ss-page-bg ${isDark ? 'bg-[#0F0F1A]' : 'bg-[#F8F9FF]'}`}
         data-theme={settings.theme}
-        style={{ width: '100%', maxWidth: '430px', height: '100%', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}
       >
         <OfflineBanner/>
 
-        {/* Main scrollable content area — all tabs except chat */}
-        {activeTab !== 'chat' && (
-          <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ paddingBottom: '80px' }}>
-            {activeTab === 'home' && <HomeView {...common} expenses={expenses} lendings={lendings} setActiveTab={setActiveTab} setShowSettings={setShowSettings}/>}
-            {activeTab === 'expenses' && <ExpensesView {...common} expenses={expenses} setExpenses={setExpenses} openEditExpense={openEditExpense}/>}
-            {activeTab === 'lend' && <LendView {...common} lendings={lendings} setLendings={setLendings} openEditLend={openEditLend}
-              expandedPersons={expandedPersons} setExpandedPersons={setExpandedPersons}
-              animatingLendId={animatingLendId} setAnimatingLendId={setAnimatingLendId}
-              expandedPayments={expandedPayments} setExpandedPayments={setExpandedPayments}
-              lendingsLoading={lendingsLoading} updateLendingInDB={updateLendingInDB}/>}
-            {activeTab === 'summary' && <SummaryView {...common} expenses={expenses} lendings={lendings} savingsGoals={savingsGoals} setSavingsGoals={setSavingsGoals}/>}
-          </div>
-        )}
-
-        {/* AI Chat — manages its own scroll */}
-        {activeTab === 'chat' && (
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <AiInsightsView {...common} expenses={expenses} lendings={lendings}/>
-          </div>
-        )}
+        {/* Main content area */}
+        <div className={activeTab === 'chat' ? 'flex flex-col flex-1 overflow-hidden pt-0' : 'flex-1 overflow-y-auto'}>
+          {renderTab()}
+        </div>
 
         {/* Bottom Nav */}
         <BottomNav activeTab={activeTab} setActiveTab={setActiveTab}/>
@@ -516,40 +371,10 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-const App = () => {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    }).catch(err => {
-      console.warn("Supabase auth error:", err);
-      // Fallback: gracefully stop loading even if Supabase is offline
-      setLoading(false);
-    });
-
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-      });
-      return () => subscription.unsubscribe();
-    } catch(e) {
-      console.warn("Supabase listener error:", e);
-    }
-  }, []);
-
-  if (loading) return null;
-
-  // If Supabase keys are missing or placeholder, bypass login and allow local access
-  const isLocalMode = !import.meta.env.VITE_SUPABASE_URL || String(import.meta.env.VITE_SUPABASE_URL).includes('placeholder');
-
-  return (
-    <ErrorBoundary>
-      {(session || isLocalMode) ? <SpendSenseApp session={session} /> : <AuthPage />}
-    </ErrorBoundary>
-  );
-};
+const App = () => (
+  <ErrorBoundary>
+    <SpendSenseApp />
+  </ErrorBoundary>
+);
 
 export default App;

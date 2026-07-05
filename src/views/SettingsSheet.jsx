@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { Sun, Moon, Download, Upload, Trash2 } from 'lucide-react';
 import { CATEGORIES, formatCurr, getTodayISO, parseAmount, generateId } from '../utils.js';
 import { BottomSheet, ConfirmDialog } from '../components/GlobalComponents.jsx';
-import { supabase } from '../supabaseClient.js';
 
 const FREQ_LABELS = { daily:'Daily', weekly:'Weekly', monthly:'Monthly' };
 
@@ -192,47 +191,12 @@ export default function SettingsSheet({ isOpen, onClose, settings, setSettings, 
             <button onClick={exportData} aria-label="Export data" className="w-full flex items-center gap-3 py-3 px-4 bg-white border border-gray-200 rounded-2xl text-sm font-medium text-gray-700 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-indigo-500">
               <Download size={16} className="text-indigo-500"/> Export Backup (JSON)
             </button>
-
-            {/* UPDATE 4 — Auto Backup Restore */}
-            <div className="mt-4">
-              <p className="text-xs font-medium text-gray-500 ss-text-muted mb-2">Auto Backups (last 5 opens)</p>
-              {(() => {
-                try {
-                  const backups = JSON.parse(localStorage.getItem('ss_backups') || '[]');
-                  if (backups.length === 0) return <p className="text-xs text-gray-400 ss-text-muted">No backups yet</p>;
-                  return backups.map((b, i) => (
-                    <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 ss-divider">
-                      <div>
-                        <p className="text-xs font-medium text-gray-700 ss-text">{i === 0 ? 'Latest' : `Backup ${i + 1}`}</p>
-                        <p className="text-[10px] text-gray-400 ss-text-muted">{new Date(b.backupDate).toLocaleString()}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Restore backup from ${new Date(b.backupDate).toLocaleString()}? Current data will be replaced.`)) {
-                            if (b.expenses) setExpenses(b.expenses);
-                            if (b.lendings) setLendings(b.lendings);
-                            if (b.savingsGoals) setSavingsGoals(b.savingsGoals);
-                            showToast('Backup restored!', 'success');
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-medium active:scale-95 transition-transform"
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  ));
-                } catch { return null; }
-              })()}
-            </div>
             <label className="w-full flex items-center gap-3 py-3 px-4 bg-white border border-gray-200 rounded-2xl text-sm font-medium text-gray-700 cursor-pointer active:scale-95 transition-transform">
               <Upload size={16} className="text-green-500"/> Import Backup
               <input type="file" accept=".json,application/json" onChange={importData} className="hidden"/>
             </label>
             <button onClick={()=>setClearConfirm(true)} aria-label="Clear all data" className="w-full flex items-center gap-3 py-3 px-4 bg-red-50 border border-red-100 rounded-2xl text-sm font-medium text-red-600 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-red-400">
               <Trash2 size={16}/> Clear All Data
-            </button>
-            <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} aria-label="Log out" className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-gray-900 border border-gray-800 rounded-2xl text-sm font-medium text-white active:scale-95 transition-transform">
-              Log Out
             </button>
           </div>
         </section>

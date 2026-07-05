@@ -7,24 +7,17 @@
   box-sizing: border-box;
 }
 
-html, body {
+body {
   margin: 0;
   padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+  background: #E8E9F3;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #D8DAF0;
 }
 
 #root {
-  width: 100%;
-  height: 100%;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  background: #D8DAF0;
-  overflow: hidden;
+  min-height: 100vh;
 }
